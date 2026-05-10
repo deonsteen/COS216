@@ -1,4 +1,6 @@
 <?php
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 
 ob_start();
 
@@ -461,7 +463,7 @@ class FlightAPI {
         $phi2   = deg2rad((float)$lat2);
         $dphi   = deg2rad((float)$lat2 - (float)$lat1);
         $dlambda= deg2rad((float)$lon2 - (float)$lon1);
-        $hav    = sin($dphi / 2) ** 2 + cos($phi1) * cos($phi2) * sin($dlambda / 2) ** 2;
+        $hav    = pow(sin($dphi / 2), 2) + cos($phi1) * cos($phi2) * pow(sin($dlambda / 2), 2);
         $theta  = 2 * asin(sqrt($hav));
         return round($R * $theta, 2);
     }
@@ -488,16 +490,18 @@ class FlightAPI {
         $stmt = $this->db->prepare("SELECT * FROM planes WHERE id = ?");
         $stmt->bind_param("i", $plane_id);
         $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
+        $result = $stmt->get_result();
+        $row    = $result->fetch_assoc();
         $stmt->close();
         return $row;
     }
 
     private function getAirportByCode($code) {
-        $stmt = $this->db->prepare("SELECT * FROM airports WHERE code = ?");
+        $stmt = $this->db->prepare("SELECT * FROM airports WHERE code = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci");
         $stmt->bind_param("s", $code);
         $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
+        $result = $stmt->get_result();
+        $row    = $result->fetch_assoc();
         $stmt->close();
         return $row;
     }
@@ -505,13 +509,14 @@ class FlightAPI {
     private function getOrCreateFlight($plane_id, $dep_code, $arr_code, $date, $flight_time, $distance) {
         $stmt = $this->db->prepare(
             "SELECT id FROM flights
-            WHERE plane_id = ? AND departure_airport_code = ? AND arrival_airport_code = ? AND departure_date = ?"
+             WHERE plane_id = ? AND departure_airport_code = ? AND arrival_airport_code = ? AND departure_date = ?"
         );
         $stmt->bind_param("isss", $plane_id, $dep_code, $arr_code, $date);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result->num_rows > 0) {
-            $id = (int) $result->fetch_assoc()['id'];
+            $row = $result->fetch_assoc();
+            $id  = (int) $row['id'];
             $stmt->close();
             return $id;
         }
@@ -519,7 +524,7 @@ class FlightAPI {
 
         $ins = $this->db->prepare(
             "INSERT INTO flights (plane_id, departure_airport_code, arrival_airport_code, departure_date, flight_time, distance)
-            VALUES (?, ?, ?, ?, ?, ?)"
+             VALUES (?, ?, ?, ?, ?, ?)"
         );
         $ins->bind_param("isssdd", $plane_id, $dep_code, $arr_code, $date, $flight_time, $distance);
         $ins->execute();
@@ -534,7 +539,9 @@ class FlightAPI {
         );
         $stmt->bind_param("i", $flight_id);
         $stmt->execute();
-        $booked    = (int) $stmt->get_result()->fetch_assoc()['total'];
+        $result = $stmt->get_result();
+        $row    = $result->fetch_assoc();
+        $booked = (int) $row['total'];
         $stmt->close();
         $available = $plane_seats - $booked;
         if ($requested > $available) {
@@ -568,7 +575,7 @@ class FlightAPI {
             }
         }
 
-        $user_id    = $this->getUserIdFromApiKey($data['apikey'] ?? '');
+        $user_id    = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
         $plane_id   = (int) $data['plane_id'];
         $dep_code   = strtoupper(trim($data['departure_airport_code']));
         $arr_code   = strtoupper(trim($data['arrival_airport_code']));
@@ -632,7 +639,7 @@ class FlightAPI {
 
     // ── GetBookings ────────────────────────────────────────────────────────────
     private function getBookings($data) {
-        $user_id = $this->getUserIdFromApiKey($data['apikey'] ?? '');
+        $user_id = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
 
         $stmt = $this->db->prepare(
             "SELECT b.id AS booking_id, b.passengers,
@@ -641,14 +648,17 @@ class FlightAPI {
                     p.id AS plane_id, p.manufacturer, p.model, p.image_url, p.seats,
                     da.name AS departure_airport_name, da.city AS departure_city,
                     aa.name AS arrival_airport_name, aa.city AS arrival_city
-            FROM bookings b
-            INNER JOIN flights f ON f.id = b.flight_id
-            INNER JOIN planes  p ON p.id = f.plane_id
-            LEFT JOIN  airports da ON da.code = f.departure_airport_code
-            LEFT JOIN  airports aa ON aa.code = f.arrival_airport_code
-            WHERE b.user_id = ?
-            ORDER BY f.departure_date ASC"
+             FROM bookings b
+             INNER JOIN flights f ON f.id = b.flight_id
+             INNER JOIN planes  p ON p.id = f.plane_id
+             LEFT JOIN  airports da ON da.code = CONVERT(f.departure_airport_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
+             LEFT JOIN  airports aa ON aa.code = CONVERT(f.arrival_airport_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
+             WHERE b.user_id = ?
+             ORDER BY f.departure_date ASC"
         );
+        if (!$stmt) {
+            $this->sendError("Database prepare error (GetBookings): " . $this->db->error, 500);
+        }
         $stmt->bind_param("i", $user_id);
         $stmt->execute();
         $result   = $stmt->get_result();
@@ -672,7 +682,7 @@ class FlightAPI {
         if (!isset($data['booking_id']) || !is_numeric($data['booking_id'])) {
             $this->sendError("Post parameters are missing", 400);
         }
-        $user_id    = $this->getUserIdFromApiKey($data['apikey'] ?? '');
+        $user_id    = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
         $booking_id = (int) $data['booking_id'];
 
         $check = $this->db->prepare("SELECT id FROM bookings WHERE id = ? AND user_id = ?");
@@ -726,7 +736,7 @@ class FlightAPI {
         if (!isset($data['plane_id']) || !is_numeric($data['plane_id'])) {
             $this->sendError("Post parameters are missing", 400);
         }
-        $user_id  = $this->getUserIdFromApiKey($data['apikey'] ?? '');
+        $user_id  = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
         $plane_id = (int) $data['plane_id'];
 
         $check = $this->db->prepare("SELECT id FROM favourites WHERE user_id = ? AND plane_id = ?");
@@ -762,7 +772,7 @@ class FlightAPI {
         if (!isset($data['plane_id']) || !is_numeric($data['plane_id'])) {
             $this->sendError("Post parameters are missing", 400);
         }
-        $user_id  = $this->getUserIdFromApiKey($data['apikey'] ?? '');
+        $user_id  = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
         $plane_id = (int) $data['plane_id'];
 
         $stmt = $this->db->prepare("DELETE FROM favourites WHERE user_id = ? AND plane_id = ?");
@@ -785,7 +795,7 @@ class FlightAPI {
     }
 
     private function getFavourites($data) {
-        $user_id = $this->getUserIdFromApiKey($data['apikey'] ?? '');
+        $user_id = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
 
         $stmt = $this->db->prepare(
             "SELECT p.* FROM planes p
