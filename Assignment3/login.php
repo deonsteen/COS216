@@ -1,6 +1,4 @@
 <!DOCTYPE html>
-<!-- Name: [Your Name] | Surname: [Your Surname] | Student Number: u25135742 -->
-<!-- COS216 PA4 - login.php -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">

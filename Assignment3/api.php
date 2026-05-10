@@ -63,8 +63,17 @@ class FlightAPI {
                 $this->validateApiKey($data);
                 $this->getAllAirports($data);
                 break;
+            case 'AddFavourite':
+                $this->addFavourite($data);
+                break;
+            case 'RemoveFavourite':
+                $this->removeFavourite($data);
+                break;
+            case 'GetFavourites':
+                $this->getFavourites($data);
+                break;
             default:
-                $this->sendError("Unknown type: '" . htmlspecialchars($data['type']) . "'. Valid types: Register, Login, GetAllPlanes, GetAllAirports.", 400);
+                $this->sendError("Unknown type: '" . htmlspecialchars($data['type']) . "'. Valid types: Register, Login, GetAllPlanes, GetAllAirports, AddFavourite, RemoveFavourite, GetFavourites.", 400);
         }
     }
 
@@ -434,6 +443,120 @@ class FlightAPI {
             $insert_stmt->close();
             $this->sendError("Failed to insert user into the database: " . $this->db->error, 500);
         }
+    }
+
+    private function getUserIdFromApiKey($apikey) {
+        if (!isset($apikey) || trim($apikey) === '') {
+            $this->sendError("Post parameters are missing", 400);
+        }
+        $apikey = trim($apikey);
+        $stmt   = $this->db->prepare("SELECT id FROM Users WHERE apikey = ?");
+        if (!$stmt) {
+            $this->sendError("Database error: " . $this->db->error, 500);
+        }
+        $stmt->bind_param("s", $apikey);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows === 0) {
+            $stmt->close();
+            $this->sendError("Invalid API key. Access denied.", 403);
+        }
+        $row = $result->fetch_assoc();
+        $stmt->close();
+        return (int) $row['id'];
+    }
+
+    private function addFavourite($data) {
+        if (!isset($data['plane_id']) || !is_numeric($data['plane_id'])) {
+            $this->sendError("Post parameters are missing", 400);
+        }
+        $user_id  = $this->getUserIdFromApiKey($data['apikey'] ?? '');
+        $plane_id = (int) $data['plane_id'];
+
+        $check = $this->db->prepare("SELECT id FROM favourites WHERE user_id = ? AND plane_id = ?");
+        $check->bind_param("ii", $user_id, $plane_id);
+        $check->execute();
+        $check->store_result();
+        if ($check->num_rows > 0) {
+            $check->close();
+            $this->sendError("Plane is already in favourites.", 409);
+        }
+        $check->close();
+
+        $stmt = $this->db->prepare("INSERT INTO favourites (user_id, plane_id) VALUES (?, ?)");
+        if (!$stmt) {
+            $this->sendError("Database error: " . $this->db->error, 500);
+        }
+        $stmt->bind_param("ii", $user_id, $plane_id);
+        if ($stmt->execute()) {
+            $stmt->close();
+            http_response_code(200);
+            echo json_encode(array(
+                "status"    => "success",
+                "timestamp" => (string) round(microtime(true) * 1000),
+                "data"      => array(array("message" => "Plane added to favourites."))
+            ));
+            exit;
+        }
+        $stmt->close();
+        $this->sendError("Failed to add to favourites.", 500);
+    }
+
+    private function removeFavourite($data) {
+        if (!isset($data['plane_id']) || !is_numeric($data['plane_id'])) {
+            $this->sendError("Post parameters are missing", 400);
+        }
+        $user_id  = $this->getUserIdFromApiKey($data['apikey'] ?? '');
+        $plane_id = (int) $data['plane_id'];
+
+        $stmt = $this->db->prepare("DELETE FROM favourites WHERE user_id = ? AND plane_id = ?");
+        if (!$stmt) {
+            $this->sendError("Database error: " . $this->db->error, 500);
+        }
+        $stmt->bind_param("ii", $user_id, $plane_id);
+        if ($stmt->execute()) {
+            $stmt->close();
+            http_response_code(200);
+            echo json_encode(array(
+                "status"    => "success",
+                "timestamp" => (string) round(microtime(true) * 1000),
+                "data"      => array(array("message" => "Plane removed from favourites."))
+            ));
+            exit;
+        }
+        $stmt->close();
+        $this->sendError("Failed to remove from favourites.", 500);
+    }
+
+    private function getFavourites($data) {
+        $user_id = $this->getUserIdFromApiKey($data['apikey'] ?? '');
+
+        $stmt = $this->db->prepare(
+            "SELECT p.* FROM planes p
+             INNER JOIN favourites f ON f.plane_id = p.id
+             WHERE f.user_id = ?
+             ORDER BY p.manufacturer ASC"
+        );
+        if (!$stmt) {
+            $this->sendError("Database error: " . $this->db->error, 500);
+        }
+        $stmt->bind_param("i", $user_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $planes = array();
+        while ($row = $result->fetch_assoc()) {
+            $planes[] = $row;
+        }
+        $stmt->close();
+
+        http_response_code(200);
+        echo json_encode(array(
+            "status"    => "success",
+            "timestamp" => (string) round(microtime(true) * 1000),
+            "data"      => $planes
+        ));
+        exit;
     }
 
     private function loginUser($data) {

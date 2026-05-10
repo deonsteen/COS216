@@ -201,6 +201,96 @@ function viewPlane(planeID) {
     window.location.href = 'view.php?id=' + planeID;
 }
 
+// ── Favourites Page ──────────────────────────────────────────────────────────
+
+function loadFavourites() {
+    const apikey = requireLogin();
+    if (!apikey) return;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', API_URL, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+
+    xhr.onreadystatechange = function () {
+        if (this.readyState !== 4) return;
+
+        const container = document.getElementById('favourites-container');
+
+        if (this.status !== 200) {
+            container.innerHTML = '<p style="color:red;">Could not load favourites.</p>';
+            return;
+        }
+
+        const response = JSON.parse(this.responseText);
+
+        if (response.status !== 'success') {
+            container.innerHTML = '<p style="color:red;">' + response.data + '</p>';
+            return;
+        }
+
+        const planes = response.data;
+        container.innerHTML = '';
+
+        if (planes.length === 0) {
+            container.innerHTML = '<p style="color: var(--primary-gold);">You have no favourite planes yet. Add some from the Planes page!</p>';
+            return;
+        }
+
+        planes.forEach(function (plane) {
+            const card = document.createElement('div');
+            card.className = 'premium-card';
+            card.id = 'fav-card-' + plane.id;
+            card.innerHTML =
+                '<img src="' + plane.image_url + '" alt="' + plane.manufacturer + ' ' + plane.model + '" style="width:100%">' +
+                '<h3>' + plane.manufacturer + ' ' + plane.model + '</h3>' +
+                '<p><strong>Capacity:</strong> ' + plane.seats + ' Seats</p>' +
+                '<p><strong>Max Range:</strong> ' + plane.max_range_km + ' km</p>' +
+                '<div class="card-action-group">' +
+                    '<button class="button" style="background-color:#8B0000; color:var(--ice-white);" ' +
+                        'onclick="removeFromFavourites(' + plane.id + ')">Remove</button>' +
+                    '<button class="button" onclick="viewPlane(' + plane.id + ')">View Details</button>' +
+                '</div>';
+            container.appendChild(card);
+        });
+    };
+
+    xhr.send(JSON.stringify({
+        type:   'GetFavourites',
+        apikey: apikey
+    }));
+}
+
+function removeFromFavourites(planeId) {
+    const apikey = getApiKey();
+    if (!apikey) return;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', API_URL, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+
+    xhr.onreadystatechange = function () {
+        if (this.readyState !== 4) return;
+        const response = JSON.parse(this.responseText);
+        if (response.status === 'success') {
+            const card = document.getElementById('fav-card-' + planeId);
+            if (card) card.remove();
+
+            const container = document.getElementById('favourites-container');
+            if (container && container.children.length === 0) {
+                container.innerHTML = '<p style="color: var(--primary-gold);">You have no favourite planes yet. Add some from the Planes page!</p>';
+            }
+        } else {
+            alert('Could not remove: ' + response.data);
+        }
+    };
+
+    xhr.send(JSON.stringify({
+        type:     'RemoveFavourite',
+        apikey:   apikey,
+        plane_id: planeId
+    }));
+}
+
 // ── Book Flights Page ────────────────────────────────────────────────────────
 
 function loadBookFlightDropdowns() {
@@ -308,6 +398,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     } else if (path.includes('view.php')) {
         loadSinglePlane();
+
+    } else if (path.includes('favourites.php')) {
+        loadFavourites();
 
     } else if (path.includes('index.php') && path.includes('PA1')) {
         loadBookFlightDropdowns();
