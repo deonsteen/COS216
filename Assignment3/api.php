@@ -72,8 +72,17 @@ class FlightAPI {
             case 'GetFavourites':
                 $this->getFavourites($data);
                 break;
+            case 'BookFlight':
+                $this->bookFlight($data);
+                break;
+            case 'GetBookings':
+                $this->getBookings($data);
+                break;
+            case 'CancelBooking':
+                $this->cancelBooking($data);
+                break;
             default:
-                $this->sendError("Unknown type: '" . htmlspecialchars($data['type']) . "'. Valid types: Register, Login, GetAllPlanes, GetAllAirports, AddFavourite, RemoveFavourite, GetFavourites.", 400);
+                $this->sendError("Unknown type: '" . htmlspecialchars($data['type']) . "'. Valid types: Register, Login, GetAllPlanes, GetAllAirports, AddFavourite, RemoveFavourite, GetFavourites, BookFlight, GetBookings, CancelBooking.", 400);
         }
     }
 
@@ -445,6 +454,253 @@ class FlightAPI {
         }
     }
 
+    // ── Haversine distance formula ─────────────────────────────────────────────
+    private function calculateDistance($lat1, $lon1, $lat2, $lon2) {
+        $R      = 6377;
+        $phi1   = deg2rad((float)$lat1);
+        $phi2   = deg2rad((float)$lat2);
+        $dphi   = deg2rad((float)$lat2 - (float)$lat1);
+        $dlambda= deg2rad((float)$lon2 - (float)$lon1);
+        $hav    = sin($dphi / 2) ** 2 + cos($phi1) * cos($phi2) * sin($dlambda / 2) ** 2;
+        $theta  = 2 * asin(sqrt($hav));
+        return round($R * $theta, 2);
+    }
+
+    // ── Flight time formula ────────────────────────────────────────────────────
+    private function calculateFlightTime($distance, $vmax, $cmax, $seats) {
+        $vc = $vmax * (1 - 0.2 * ($cmax / ($cmax + 80 * $seats)));
+
+        if ($seats > 300)      $tclimb_base = 20;
+        elseif ($seats > 200)  $tclimb_base = 15;
+        elseif ($seats > 100)  $tclimb_base = 10;
+        elseif ($seats > 50)   $tclimb_base = 7;
+        else                   $tclimb_base = 5;
+
+        $k      = 0.001; // rate constant (not specified in spec)
+        $tclimb = $tclimb_base * (1 - exp(-$k * $distance));
+
+        // ttotal in minutes: (d/vc)*60 + tclimb + 15
+        return round(($distance / $vc) * 60 + $tclimb + 15, 2);
+    }
+
+    // ── DB helpers ─────────────────────────────────────────────────────────────
+    private function getPlaneById($plane_id) {
+        $stmt = $this->db->prepare("SELECT * FROM planes WHERE id = ?");
+        $stmt->bind_param("i", $plane_id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $row;
+    }
+
+    private function getAirportByCode($code) {
+        $stmt = $this->db->prepare("SELECT * FROM airports WHERE code = ?");
+        $stmt->bind_param("s", $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $row;
+    }
+
+    private function getOrCreateFlight($plane_id, $dep_code, $arr_code, $date, $flight_time, $distance) {
+        $stmt = $this->db->prepare(
+            "SELECT id FROM flights
+            WHERE plane_id = ? AND departure_airport_code = ? AND arrival_airport_code = ? AND departure_date = ?"
+        );
+        $stmt->bind_param("isss", $plane_id, $dep_code, $arr_code, $date);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows > 0) {
+            $id = (int) $result->fetch_assoc()['id'];
+            $stmt->close();
+            return $id;
+        }
+        $stmt->close();
+
+        $ins = $this->db->prepare(
+            "INSERT INTO flights (plane_id, departure_airport_code, arrival_airport_code, departure_date, flight_time, distance)
+            VALUES (?, ?, ?, ?, ?, ?)"
+        );
+        $ins->bind_param("isssdd", $plane_id, $dep_code, $arr_code, $date, $flight_time, $distance);
+        $ins->execute();
+        $id = (int) $this->db->insert_id;
+        $ins->close();
+        return $id;
+    }
+
+    private function checkSeatAvailability($flight_id, $plane_seats, $requested) {
+        $stmt = $this->db->prepare(
+            "SELECT COALESCE(SUM(passengers), 0) AS total FROM bookings WHERE flight_id = ?"
+        );
+        $stmt->bind_param("i", $flight_id);
+        $stmt->execute();
+        $booked    = (int) $stmt->get_result()->fetch_assoc()['total'];
+        $stmt->close();
+        $available = $plane_seats - $booked;
+        if ($requested > $available) {
+            $this->sendError(
+                "Not enough seats. Requested: $requested, Available: $available. " .
+                "Please choose a different date or plane.", 409
+            );
+        }
+    }
+
+    private function createBookingRecord($flight_id, $user_id, $passengers) {
+        $stmt = $this->db->prepare(
+            "INSERT INTO bookings (flight_id, user_id, passengers) VALUES (?, ?, ?)"
+        );
+        $stmt->bind_param("iii", $flight_id, $user_id, $passengers);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $this->sendError("Failed to create booking.", 500);
+        }
+        $id = (int) $this->db->insert_id;
+        $stmt->close();
+        return $id;
+    }
+
+    // ── BookFlight ─────────────────────────────────────────────────────────────
+    private function bookFlight($data) {
+        $required = array('plane_id', 'departure_airport_code', 'arrival_airport_code', 'departure_date', 'passengers');
+        foreach ($required as $field) {
+            if (!isset($data[$field]) || trim((string)$data[$field]) === '') {
+                $this->sendError("Post parameters are missing", 400);
+            }
+        }
+
+        $user_id    = $this->getUserIdFromApiKey($data['apikey'] ?? '');
+        $plane_id   = (int) $data['plane_id'];
+        $dep_code   = strtoupper(trim($data['departure_airport_code']));
+        $arr_code   = strtoupper(trim($data['arrival_airport_code']));
+        $dep_date   = trim($data['departure_date']);
+        $passengers = (int) $data['passengers'];
+        $ret_date   = isset($data['return_date']) && trim($data['return_date']) !== ''
+                    ? trim($data['return_date']) : null;
+
+        if ($passengers < 1) {
+            $this->sendError("Passengers must be at least 1.", 400);
+        }
+        if ($dep_code === $arr_code) {
+            $this->sendError("Departure and arrival airports cannot be the same.", 400);
+        }
+
+        $plane = $this->getPlaneById($plane_id);
+        if (!$plane) $this->sendError("Plane not found.", 404);
+
+        $dep = $this->getAirportByCode($dep_code);
+        $arr = $this->getAirportByCode($arr_code);
+        if (!$dep) $this->sendError("Departure airport not found: $dep_code", 404);
+        if (!$arr) $this->sendError("Arrival airport not found: $arr_code", 404);
+
+        $distance    = $this->calculateDistance(
+            $dep['latitude'], $dep['longitude'],
+            $arr['latitude'], $arr['longitude']
+        );
+        $flight_time = $this->calculateFlightTime(
+            $distance, $plane['max_speed_kmh'], $plane['max_cargo_kg'], $plane['seats']
+        );
+
+        // Outbound flight
+        $out_flight_id  = $this->getOrCreateFlight($plane_id, $dep_code, $arr_code, $dep_date, $flight_time, $distance);
+        $this->checkSeatAvailability($out_flight_id, $plane['seats'], $passengers);
+        $out_booking_id = $this->createBookingRecord($out_flight_id, $user_id, $passengers);
+
+        $result = array(
+            'outbound_booking_id' => $out_booking_id,
+            'outbound_flight_id'  => $out_flight_id,
+            'distance_km'         => $distance,
+            'flight_time_min'     => $flight_time
+        );
+
+        // Return flight (swap airports)
+        if ($ret_date) {
+            $ret_flight_id  = $this->getOrCreateFlight($plane_id, $arr_code, $dep_code, $ret_date, $flight_time, $distance);
+            $this->checkSeatAvailability($ret_flight_id, $plane['seats'], $passengers);
+            $ret_booking_id = $this->createBookingRecord($ret_flight_id, $user_id, $passengers);
+            $result['return_booking_id'] = $ret_booking_id;
+            $result['return_flight_id']  = $ret_flight_id;
+        }
+
+        http_response_code(200);
+        echo json_encode(array(
+            "status"    => "success",
+            "timestamp" => (string) round(microtime(true) * 1000),
+            "data"      => array($result)
+        ));
+        exit;
+    }
+
+    // ── GetBookings ────────────────────────────────────────────────────────────
+    private function getBookings($data) {
+        $user_id = $this->getUserIdFromApiKey($data['apikey'] ?? '');
+
+        $stmt = $this->db->prepare(
+            "SELECT b.id AS booking_id, b.passengers,
+                    f.id AS flight_id, f.departure_date, f.flight_time, f.distance,
+                    f.departure_airport_code, f.arrival_airport_code,
+                    p.id AS plane_id, p.manufacturer, p.model, p.image_url, p.seats,
+                    da.name AS departure_airport_name, da.city AS departure_city,
+                    aa.name AS arrival_airport_name, aa.city AS arrival_city
+            FROM bookings b
+            INNER JOIN flights f ON f.id = b.flight_id
+            INNER JOIN planes  p ON p.id = f.plane_id
+            LEFT JOIN  airports da ON da.code = f.departure_airport_code
+            LEFT JOIN  airports aa ON aa.code = f.arrival_airport_code
+            WHERE b.user_id = ?
+            ORDER BY f.departure_date ASC"
+        );
+        $stmt->bind_param("i", $user_id);
+        $stmt->execute();
+        $result   = $stmt->get_result();
+        $bookings = array();
+        while ($row = $result->fetch_assoc()) {
+            $bookings[] = $row;
+        }
+        $stmt->close();
+
+        http_response_code(200);
+        echo json_encode(array(
+            "status"    => "success",
+            "timestamp" => (string) round(microtime(true) * 1000),
+            "data"      => $bookings
+        ));
+        exit;
+    }
+
+    // ── CancelBooking ──────────────────────────────────────────────────────────
+    private function cancelBooking($data) {
+        if (!isset($data['booking_id']) || !is_numeric($data['booking_id'])) {
+            $this->sendError("Post parameters are missing", 400);
+        }
+        $user_id    = $this->getUserIdFromApiKey($data['apikey'] ?? '');
+        $booking_id = (int) $data['booking_id'];
+
+        $check = $this->db->prepare("SELECT id FROM bookings WHERE id = ? AND user_id = ?");
+        $check->bind_param("ii", $booking_id, $user_id);
+        $check->execute();
+        $check->store_result();
+        if ($check->num_rows === 0) {
+            $check->close();
+            $this->sendError("Booking not found or access denied.", 404);
+        }
+        $check->close();
+
+        $stmt = $this->db->prepare("DELETE FROM bookings WHERE id = ? AND user_id = ?");
+        $stmt->bind_param("ii", $booking_id, $user_id);
+        if ($stmt->execute()) {
+            $stmt->close();
+            http_response_code(200);
+            echo json_encode(array(
+                "status"    => "success",
+                "timestamp" => (string) round(microtime(true) * 1000),
+                "data"      => array(array("message" => "Booking cancelled successfully."))
+            ));
+            exit;
+        }
+        $stmt->close();
+        $this->sendError("Failed to cancel booking.", 500);
+    }
+
     private function getUserIdFromApiKey($apikey) {
         if (!isset($apikey) || trim($apikey) === '') {
             $this->sendError("Post parameters are missing", 400);
@@ -533,9 +789,9 @@ class FlightAPI {
 
         $stmt = $this->db->prepare(
             "SELECT p.* FROM planes p
-             INNER JOIN favourites f ON f.plane_id = p.id
-             WHERE f.user_id = ?
-             ORDER BY p.manufacturer ASC"
+            INNER JOIN favourites f ON f.plane_id = p.id
+            WHERE f.user_id = ?
+            ORDER BY p.manufacturer ASC"
         );
         if (!$stmt) {
             $this->sendError("Database error: " . $this->db->error, 500);

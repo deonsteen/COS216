@@ -376,6 +376,167 @@ function loadAirportOptions(apikey, page) {
     }));
 }
 
+// ── Book Flights form submit ──────────────────────────────────────────────────
+
+function bookFlight() {
+    const apikey = getApiKey();
+    if (!apikey) { window.location.href = '../PA3/login.php'; return; }
+
+    const planeId   = document.getElementById('plane-type').value;
+    const depCode   = document.getElementById('departure-airport').value;
+    const arrCode   = document.getElementById('arrival-airport').value;
+    const depDate   = document.getElementById('departure-date').value;
+    const passengers= document.getElementById('passengers').value;
+    const retToggle = document.getElementById('return-flight-toggle');
+    const retDate   = (retToggle && retToggle.checked)
+                    ? document.getElementById('return-date').value : '';
+    const msgDiv    = document.getElementById('booking-message');
+
+    msgDiv.textContent = '';
+
+    if (!planeId || !depCode || !arrCode || !depDate || !passengers) {
+        msgDiv.style.color = 'red';
+        msgDiv.textContent = 'Please fill in all required fields.';
+        return;
+    }
+    if (depCode === arrCode) {
+        msgDiv.style.color = 'red';
+        msgDiv.textContent = 'Departure and arrival airports cannot be the same.';
+        return;
+    }
+    if (retToggle && retToggle.checked && !retDate) {
+        msgDiv.style.color = 'red';
+        msgDiv.textContent = 'Please select a return date.';
+        return;
+    }
+
+    msgDiv.style.color = 'var(--primary-gold)';
+    msgDiv.textContent = 'Booking...';
+
+    const body = {
+        type:                     'BookFlight',
+        apikey:                   apikey,
+        plane_id:                 planeId,
+        departure_airport_code:   depCode,
+        arrival_airport_code:     arrCode,
+        departure_date:           depDate,
+        passengers:               parseInt(passengers)
+    };
+    if (retDate) body.return_date = retDate;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', API_URL, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+
+    xhr.onreadystatechange = function () {
+        if (this.readyState !== 4) return;
+        const response = JSON.parse(this.responseText);
+        if (response.status === 'success') {
+            msgDiv.style.color = 'var(--primary-gold)';
+            msgDiv.textContent = 'Flight booked successfully!';
+            setTimeout(function () {
+                window.location.href = 'bookings.php';
+            }, 1200);
+        } else {
+            msgDiv.style.color = 'red';
+            msgDiv.textContent = response.data;
+        }
+    };
+
+    xhr.send(JSON.stringify(body));
+}
+
+// ── Bookings Page ─────────────────────────────────────────────────────────────
+
+function formatFlightTime(minutes) {
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
+    return h + 'h ' + m + 'm';
+}
+
+function loadBookings() {
+    const apikey = requireLogin();
+    if (!apikey) return;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', API_URL, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+
+    xhr.onreadystatechange = function () {
+        if (this.readyState !== 4) return;
+
+        const container = document.getElementById('bookings-container');
+
+        if (this.status !== 200) {
+            container.innerHTML = '<p style="color:red;">Could not load bookings.</p>';
+            return;
+        }
+
+        const response = JSON.parse(this.responseText);
+
+        if (response.status !== 'success') {
+            container.innerHTML = '<p style="color:red;">' + response.data + '</p>';
+            return;
+        }
+
+        const bookings = response.data;
+        container.innerHTML = '';
+
+        if (bookings.length === 0) {
+            container.innerHTML = '<p style="color: var(--primary-gold);">You have no bookings yet. <a href="index.php" style="color:var(--primary-gold);">Book a flight!</a></p>';
+            return;
+        }
+
+        bookings.forEach(function (b) {
+            const card = document.createElement('div');
+            card.className = 'premium-card';
+            card.id = 'booking-card-' + b.booking_id;
+            card.innerHTML =
+                '<img src="' + b.image_url + '" alt="' + b.manufacturer + ' ' + b.model + '" style="width:100%">' +
+                '<h2>' + b.manufacturer + ' ' + b.model + '</h2>' +
+                '<p><strong>Route:</strong> ' + (b.departure_city || b.departure_airport_code) +
+                    ' → ' + (b.arrival_city || b.arrival_airport_code) + '</p>' +
+                '<p><strong>Departure Date:</strong> ' + b.departure_date + '</p>' +
+                '<p><strong>Passengers:</strong> ' + b.passengers + '</p>' +
+                '<p><strong>Distance:</strong> ' + parseFloat(b.distance).toFixed(0) + ' km</p>' +
+                '<p><strong>Flight Time:</strong> ' + formatFlightTime(b.flight_time) + '</p>' +
+                '<button class="button" style="background-color:#8B0000; color:var(--ice-white);" ' +
+                    'onclick="cancelBooking(' + b.booking_id + ')">Cancel Booking</button>';
+            container.appendChild(card);
+        });
+    };
+
+    xhr.send(JSON.stringify({ type: 'GetBookings', apikey: apikey }));
+}
+
+function cancelBooking(bookingId) {
+    const apikey = getApiKey();
+    if (!apikey) return;
+
+    if (!confirm('Are you sure you want to cancel this booking?')) return;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', API_URL, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+
+    xhr.onreadystatechange = function () {
+        if (this.readyState !== 4) return;
+        const response = JSON.parse(this.responseText);
+        if (response.status === 'success') {
+            const card = document.getElementById('booking-card-' + bookingId);
+            if (card) card.remove();
+            const container = document.getElementById('bookings-container');
+            if (container && container.children.length === 0) {
+                container.innerHTML = '<p style="color: var(--primary-gold);">You have no bookings yet. <a href="index.php" style="color:var(--primary-gold);">Book a flight!</a></p>';
+            }
+        } else {
+            alert('Could not cancel: ' + response.data);
+        }
+    };
+
+    xhr.send(JSON.stringify({ type: 'CancelBooking', apikey: apikey, booking_id: bookingId }));
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -402,7 +563,10 @@ document.addEventListener('DOMContentLoaded', function () {
     } else if (path.includes('favourites.php')) {
         loadFavourites();
 
-    } else if (path.includes('index.php') && path.includes('PA1')) {
+    } else if (path.includes('bookings.php')) {
+        loadBookings();
+
+    } else if (path.includes('index.php')) {
         loadBookFlightDropdowns();
     }
 });
