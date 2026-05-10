@@ -1,0 +1,23 @@
+/* 1. Ensure the container takes up the full width minus the navbar */
+.booking-container {
+    width: 100%;
+    max-width: 1200px;
+    padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Centers the list itself, not the items inside */
+}
+
+.page-title {
+    color: var(--ice-white);
+    margin-bottom: 30px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.booking-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 25px;
+    width: 100%;
+}

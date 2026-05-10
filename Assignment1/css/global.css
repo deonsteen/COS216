@@ -1,0 +1,180 @@
+:root {
+    --primary-gold: #C5A059;
+    --obsidian: #16171B;
+    --stone-grey: #4A4A4A; 
+    --ice-white: #FAF9F6;
+    --glass-bg: rgba(197, 160, 89, 0.1);
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    background-color: var(--obsidian);
+    background-image:
+        radial-gradient(at 0% 0%, rgba(197, 160, 89, 0.4) 0px, transparent 60%),
+        radial-gradient(at 100% 100%, rgba(168, 162, 154, 0.5) 0px, transparent 60%),
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+
+    background-attachment: fixed;
+    background-size: cover;
+    color: #F1F1F1;
+}
+.card-container {
+    display: grid;
+    /* Math: Min 320px wide, max 1 fraction of available space */
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); 
+    gap: 25px;
+    width: 95%;
+    max-width: 1400px;
+    margin: 30px auto;
+}
+
+
+/*login page card*/
+
+/* 1. The Centering Universe */
+.login-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    width: 100%;
+}
+
+/* 2. The Static Card (Luxury style, zero levitation) */
+.login-card {
+    /* Using your existing semi-transparent gold variable instead of solid black */
+    background: var(--glass-bg); 
+    backdrop-filter: blur(10px); /* Adds a modern frosted glass effect */
+    border: 1px solid var(--primary-gold);
+    border-radius: 12px;
+    padding: 40px;
+    width: 90%;
+    max-width: 400px; 
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8); 
+}
+
+.login-title {
+    text-align: center;
+    color: var(--primary-gold);
+    margin: 0 0 25px 0; /* Pushes the form down slightly */
+}
+
+/* 3. The Vertical Stack (Rotating the axis to Y) */
+.login-form {
+    display: flex;
+    flex-direction: column; 
+    gap: 15px; /* The exact vertical distance between each input */
+}
+
+/* 4. The Inputs */
+.login-form input,
+.login-form select {
+    width: 100%;
+    box-sizing: border-box; /* Keeps padding inside the 100% width calculation */
+    padding: 12px 15px;
+    border-radius: 6px;
+    border: 1px solid var(--stone-grey);
+    background-color: var(--ice-white);
+    color: var(--obsidian);
+    font-size: 15px;
+}
+
+/* A nice subtle gold glow when the user clicks an input */
+.login-form input:focus,
+.login-form select:focus {
+    outline: none;
+    border-color: var(--primary-gold);
+}
+
+/* Stretching your existing button to fill the bottom of the form */
+.login-form .button {
+    width: 100%;
+    margin-top: 10px;
+}
+
+/* Error message styling */
+.error-text {
+    color: #ff4d4d;
+    text-align: center;
+    margin-top: 15px;
+    min-height: 20px;
+}
+
+/* 3. The Register Button */
+.login-card .button {
+    margin-top: 10px;        /* A little extra space to separate action from input */
+    padding: 15px;           /* Makes the button nice and large */
+    width: 100%;             /* Stretches it across the card */
+}
+.premium-card {
+    background: var(--obsidian); /* Black/Dark Grey */
+    border: 1px solid var(--primary-gold); /* Gold */
+    border-radius: 12px;
+    padding: 20px;
+    color: var(--ice-white); /* Off-white */
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.premium-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 15px 30px rgba(197, 160, 89, 0.3); /* Gold Glow */
+    border-color: var(--ice-white);
+}
+
+.premium-card img {
+    width: 100%;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border: 1px solid var(--stone-grey);
+}
+
+.premium-card h2, .premium-card h3 {
+    color: var(--primary-gold);
+    margin: 0 0 10px 0;
+}
+
+.premium-card p {
+    border-bottom: 1px solid rgba(168, 162, 154, 0.3);
+    padding-bottom: 8px;
+    margin: 8px 0;
+}
+
+.button-container {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+}
+
+.button {
+    margin: 5px 0;
+    text-align: center;
+    text-decoration: none;
+    color: #0B0C10;
+    background-color: #C5A059;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    border: 1px solid transparent;
+}
+
+.button:hover {
+    background-color: #16171B;
+    color: #C5A059;
+    border-color: #C5A059;
+    transform: translateY(-8px);
+    box-shadow: 0 10px 20px rgba(197, 160, 89, 0.3);
+}

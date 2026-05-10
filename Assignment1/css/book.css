@@ -1,0 +1,112 @@
+/* Centers the massive form card on the screen */
+.booking-page-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: calc(100vh - 80px); /* Subtracts the navbar height so it stays perfectly centered */
+    width: 100%;
+    padding: 40px 20px;
+    box-sizing: border-box;
+}
+
+.booking-form-card {
+    background: var(--obsidian);
+    border: 2px solid var(--primary-gold);
+    border-radius: 15px;
+    padding: 40px;
+    width: 100%;
+    max-width: 800px; /* Prevents the form from stretching to infinity */
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+}
+
+.form-title {
+    color: var(--primary-gold);
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 30px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+/* The Grid Math: 2 columns on desktop, 1 column on mobile */
+.flight-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 25px;
+}
+
+/* Forces specific elements (like the submit button) to span across all available columns */
+.full-width {
+    grid-column: 1 / -1;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.label {
+    color: var(--primary-gold);
+    font-size: 0.95rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+/* Styles the actual dropdowns and date pickers */
+.form-input {
+    background: #1A1A1B;
+    border: 1px solid var(--stone-grey);
+    color: var(--ice-white);
+    padding: 15px;
+    border-radius: 6px;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.3s ease;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.form-input:focus {
+    border-color: var(--primary-gold);
+    box-shadow: 0 0 8px rgba(197, 160, 89, 0.3);
+}
+
+/* Makes the little calendar icon white so you can actually see it */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+}
+
+.checkbox-container {
+    display: flex;
+    gap: 20px;
+    color: var(--ice-white);
+    padding-top: 5px;
+}
+
+.checkbox-container label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+/* Gives checkboxes and radio buttons that gold tint */
+input[type="radio"], .accent-checkbox {
+    accent-color: var(--primary-gold);
+    transform: scale(1.2);
+    cursor: pointer;
+}
+
+/* The massive action button at the bottom */
+.submit-btn {
+    display: block;
+    width: 100%;
+    padding: 18px;
+    font-size: 1.2rem;
+    text-align: center;
+    margin-top: 10px;
+    box-sizing: border-box;
+}

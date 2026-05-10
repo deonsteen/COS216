@@ -1,0 +1,36 @@
+.navbar {
+    width: 100%;
+    background-color: var(--obsidian);
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    padding: 20px 0;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    border-bottom: 2px solid var(--primary-gold); 
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+}
+
+.navbar a {
+    text-decoration: none;
+    color: var(--ice-white);
+    font-size: 1.1rem;
+    font-weight: bold;
+    padding: 8px 16px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+}
+
+.navbar a:hover {
+    color: var(--obsidian);
+    background-color: var(--primary-gold);
+    transform: translateY(-2px);
+}
+
+.navbar a.active {
+    color: var(--primary-gold);
+    background-color: rgba(197, 160, 89, 0.1); 
+    border-bottom: 2px solid var(--primary-gold);
+    border-radius: 6px 6px 0 0;
+}

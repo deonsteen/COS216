@@ -1,0 +1,135 @@
+/* Container logic */
+.view-page-container {
+    width: 95%;
+    max-width: 1200px;
+    margin: 40px auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* The Escape Vector */
+.back-btn {
+    align-self: flex-start;
+    color: var(--primary-gold);
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 1.1rem;
+    transition: transform 0.3s ease;
+    display: inline-block;
+}
+
+.back-btn:hover {
+    /* Math: shifts the element -10 pixels along the x-axis */
+    transform: translateX(-10px); 
+    color: var(--ice-white);
+}
+
+/* The massive detail card */
+.detail-card {
+    display: flex;
+    background: var(--obsidian);
+    border: 2px solid var(--primary-gold);
+    border-radius: 15px;
+    overflow: hidden; /* Stops the image from ignoring the border radius */
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+    flex-wrap: wrap; /* Automatically drops the text below the image on small screens */
+}
+
+/* Image container */
+.image-section {
+    flex: 1 1 400px; /* Flex-grow: 1, Flex-shrink: 1, Base-width: 400px */
+    background: #1A1A1B;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.view-img {
+    width: 100%;
+    height: auto;
+    max-height: 400px;
+    object-fit: contain; /* Prevents the image aspect ratio from distorting */
+}
+
+/* Text & Specs container */
+.info-section {
+    flex: 2 1 500px; /* Takes up double the growth space compared to the image */
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+}
+
+.info-section h1 {
+    color: var(--primary-gold);
+    margin-top: 0;
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+
+.description {
+    color: var(--ice-white);
+    font-size: 1.1rem;
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+/* A sleek gradient line */
+.gold-divider {
+    border: 0;
+    height: 1px;
+    background: linear-gradient(to right, var(--primary-gold), transparent);
+    margin: 20px 0;
+    width: 100%;
+}
+
+.info-section h3 {
+    color: var(--primary-gold);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
+}
+
+/* --- The 2D Grid Dashboard for Specs --- */
+.specs-grid {
+    display: grid;
+    /* Formula: Fit as many 200px columns as possible into the container */
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.spec-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    background: rgba(197, 160, 89, 0.05); /* 5% opacity gold */
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 3px solid var(--primary-gold);
+}
+
+/* Forces an item to span 100% of the grid width */
+.spec-item.full-width {
+    grid-column: 1 / -1; 
+}
+
+.spec-label {
+    color: var(--stone-grey);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    font-weight: bold;
+}
+
+.spec-value {
+    color: var(--ice-white);
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 15px;
+    margin-top: auto; /* Pushes the buttons to the very bottom of the flex container */
+}
