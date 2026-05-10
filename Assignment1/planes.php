@@ -11,96 +11,40 @@
     <?php include '../PA3/header.php'; ?>
 
     <div class="planes-page-container">
-        
+
         <section class="top-filter-bar">
             <div class="filter-item">
                 <label>Search Planes</label>
-                <input type="text" placeholder="Search planes...">
+                <input type="text" id="search-input" placeholder="Search by model...">
             </div>
-            
+
             <div class="filter-item">
                 <label>Manufacturer</label>
-                <select>
-                    <option>All</option>
-                    <option>Boeing</option>
-                    <option>Airbus</option>
+                <select id="manufacturer-filter">
+                    <option value="All">All</option>
+                    <option value="Boeing">Boeing</option>
+                    <option value="Airbus">Airbus</option>
+                    <option value="Embraer">Embraer</option>
+                    <option value="Bombardier">Bombardier</option>
                 </select>
             </div>
 
             <div class="filter-item">
-                <label>Seat Range (50 - 500)</label>
-                <input type="range" min="50" max="500">
-            </div>
-
-            <div class="filter-item">
-                <label>Cabin Class</label>
-                <div class="checkbox-group">
-                    <label><input type="checkbox"> Economy</label>
-                    <label><input type="checkbox"> Business</label>
-                    <label><input type="checkbox"> First</label>
-                </div>
+                <label>Max Seats: <span id="seat-range-label">500</span></label>
+                <input type="range" id="seat-range" min="50" max="600" value="600"
+                       oninput="document.getElementById('seat-range-label').textContent = this.value">
             </div>
 
             <div class="filter-item" style="flex: 0;">
-                <button class="button">Apply Filters</button>
+                <button class="button" id="apply-filters">Apply Filters</button>
             </div>
         </section>
 
-        <div class="planes-grid" id = "planes-container">
-            <div class="premium-card">
-                <img src="img/planes/plane2.png" alt="Embraer E195">
-                <h3>Embraer E195</h3>
-                <p><strong>Capacity:</strong> 116 Seats</p>
-                <div class="card-action-group">
-                    <button class="button">Add to Favourites</button>
-                    <a href="view.html" class="button">View</a>
-                </div>
-            </div>
-
-            <div class="premium-card">
-                <img src="img/planes/plane3.png" alt="Bombardier CRJ900">
-                <h3>Bombardier CRJ900</h3>
-                <p><strong>Capacity:</strong> 90 Seats</p>
-                <div class="card-action-group">
-                    <button class="button">Add to Favourites</button>
-                    <a href="view.html" class="button">View</a>
-                </div>
-            </div>
-
-            <div class="premium-card">
-                <img src="img/planes/plane4.png" alt="Airbus A380">
-                <h3>Airbus A380</h3>
-                <p><strong>Capacity:</strong> 525 Seats</p>
-                <div class="card-action-group">
-                    <button class="button">Add to Favourites</button>
-                    <a href="view.html" class="button">View</a>
-                </div>
-            </div>
-
-            <div class="premium-card">
-                <img src="img/planes/plane1.png" alt="Boeing 747">
-                <h3>Boeing 747</h3>
-                <p><strong>Capacity:</strong> 416 Seats</p>
-                <div class="card-action-group">
-                    <button class="button">Add to Favourites</button>
-                    <a href="view.html" class="button">View</a>
-                </div>
-            </div>
-
-            <div class="premium-card">
-                <img src="img/planes/plane5.png" alt="Airbus A220">
-                <h3>Airbus A220</h3>
-                <p><strong>Capacity:</strong> 135 Seats</p>
-                <div class="card-action-group">
-                    <button class="button">Add to Favourites</button>
-                    <a href="view.html" class="button">View</a>
-                </div>
-            </div>
+        <div class="planes-grid" id="planes-container">
+            <p style="color: var(--primary-gold);">Loading planes...</p>
         </div>
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    
     <script src="../PA2/script.js"></script>
 </body>
 </html>

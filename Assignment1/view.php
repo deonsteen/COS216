@@ -10,7 +10,7 @@
 </head>
 
 <body>
-    <?php include 'header.php'; ?>
+    <?php include '../PA3/header.php'; ?>
 
     <main class="view-page-container">
         <a href="planes.php" class="back-btn">← Back to Fleet</a>

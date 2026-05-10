@@ -52,6 +52,9 @@ class FlightAPI {
             case 'Register':
                 $this->registerUser($data);
                 break;
+            case 'Login':
+                $this->loginUser($data);
+                break;
             case 'GetAllPlanes':
                 $this->validateApiKey($data);
                 $this->getAllPlanes($data);
@@ -61,7 +64,7 @@ class FlightAPI {
                 $this->getAllAirports($data);
                 break;
             default:
-                $this->sendError("Unknown type: '" . htmlspecialchars($data['type']) . "'. Valid types: Register, GetAllPlanes, GetAllAirports.", 400);
+                $this->sendError("Unknown type: '" . htmlspecialchars($data['type']) . "'. Valid types: Register, Login, GetAllPlanes, GetAllAirports.", 400);
         }
     }
 
@@ -431,6 +434,62 @@ class FlightAPI {
             $insert_stmt->close();
             $this->sendError("Failed to insert user into the database: " . $this->db->error, 500);
         }
+    }
+
+    private function loginUser($data) {
+        if (!isset($data['email']) || trim($data['email']) === '' ||
+            !isset($data['password']) || $data['password'] === '') {
+            $this->sendError("Post parameters are missing", 400);
+        }
+
+        $email    = trim($data['email']);
+        $password = $data['password'];
+
+        $stmt = $this->db->prepare(
+            "SELECT id, name, surname, email, apikey, password FROM Users WHERE email = ?"
+        );
+        if (!$stmt) {
+            $this->sendError("Database error: " . $this->db->error, 500);
+        }
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result->num_rows === 0) {
+            $stmt->close();
+            $this->sendError("Invalid email or password.", 401);
+        }
+
+        $user = $result->fetch_assoc();
+        $stmt->close();
+
+        // Password stored as "salt:hash"
+        $parts = explode(':', $user['password']);
+        if (count($parts) !== 2) {
+            $this->sendError("Account error. Please re-register.", 500);
+        }
+
+        list($salt, $stored_hash) = $parts;
+        $input_hash = hash('sha256', $salt . $password);
+
+        if (!hash_equals($stored_hash, $input_hash)) {
+            $this->sendError("Invalid email or password.", 401);
+        }
+
+        http_response_code(200);
+        echo json_encode(array(
+            "status"    => "success",
+            "timestamp" => (string) round(microtime(true) * 1000),
+            "data"      => array(
+                array(
+                    "apikey"  => $user['apikey'],
+                    "name"    => $user['name'],
+                    "surname" => $user['surname'],
+                    "email"   => $user['email']
+                )
+            )
+        ));
+        exit;
     }
 
     private function sendError($message, $http_code) {

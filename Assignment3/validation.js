@@ -50,6 +50,8 @@ document.getElementById('signupForm').addEventListener('submit', function (event
     
     .then(function(data) {
         if (data.status === "success") {
+            localStorage.setItem('apikey',    data.data.apikey);
+            localStorage.setItem('user_name', name);
             window.location.href = "../PA1/index.php";
         } else if (data.status === "error") {
             errorDiv.textContent = data.data;
