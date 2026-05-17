@@ -11,9 +11,9 @@ if (!file_exists($config_path)) {
     header("Content-Type: application/json");
     http_response_code(500);
     echo json_encode(array(
-        "status"    => "error",
+        "status" => "error",
         "timestamp" => (string) round(microtime(true) * 1000),
-        "data"      => "Server configuration error: config.php not found. Check the path in api.php."
+        "data" => "Server configuration error: config.php not found. Check the path in api.php."
     ));
     exit;
 }
@@ -23,22 +23,29 @@ require_once $config_path;
 ob_end_clean();
 header("Content-Type: application/json");
 
-class FlightAPI {
+class FlightAPI
+{
     private static $instance = null;
     private $db;
 
-    private function __construct($dbConnection) {
+    // Shared secret used by the NodeJS server for server-to-server calls
+    const SERVER_API_KEY = 'flighttracker_server_2026';
+
+    private function __construct($dbConnection)
+    {
         $this->db = $dbConnection;
     }
 
-    public static function getInstance($dbConnection) {
+    public static function getInstance($dbConnection)
+    {
         if (self::$instance == null) {
             self::$instance = new FlightAPI($dbConnection);
         }
         return self::$instance;
     }
 
-    public function processRequest() {
+    public function processRequest()
+    {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->sendError("Method Not Allowed. This API only accepts POST requests.", 405);
         }
@@ -87,12 +94,28 @@ class FlightAPI {
                 $this->validateApiKey($data);
                 $this->getAirports($data);
                 break;
+            case 'GetAllFlights':
+                $this->getAllFlights($data);
+                break;
+            case 'GetFlight':
+                $this->getFlight($data);
+                break;
+            case 'DispatchFlight':
+                $this->dispatchFlight($data);
+                break;
+            case 'BoardFlight':
+                $this->boardFlight($data);
+                break;
+            case 'UpdateFlightPosition':
+                $this->updateFlightPosition($data);
+                break;
             default:
                 $this->sendError("Unknown type: '" . htmlspecialchars($data['type']) . "'. Valid types: Register, Login, GetAllPlanes, GetAllAirports, AddFavourite, RemoveFavourite, GetFavourites, BookFlight, GetBookings, CancelBooking.", 400);
         }
     }
 
-    private function validateApiKey($data) {
+    private function validateApiKey($data)
+    {
         if (!isset($data['apikey']) || trim($data['apikey']) === '') {
             $this->sendError("Post parameters are missing", 400);
         }
@@ -114,14 +137,22 @@ class FlightAPI {
         $stmt->close();
     }
 
-    private function getAllPlanes($data) {
+    private function getAllPlanes($data)
+    {
         $allowed_columns = array(
-            'id', 'seats', 'description', 'image_url',
-            'max_range_km', 'max_cargo_kg', 'max_speed_kmh',
-            'model', 'manufacturer', 'classes'
+            'id',
+            'seats',
+            'description',
+            'image_url',
+            'max_range_km',
+            'max_cargo_kg',
+            'max_speed_kmh',
+            'model',
+            'manufacturer',
+            'classes'
         );
 
-        $fuzzy = isset($data['fuzzy']) ? (bool)$data['fuzzy'] : true;
+        $fuzzy = isset($data['fuzzy']) ? (bool) $data['fuzzy'] : true;
 
         $return_cols = null;
         if (isset($data['return'])) {
@@ -140,10 +171,10 @@ class FlightAPI {
         // --- limit ---
         $limit = null;
         if (isset($data['limit'])) {
-            if (!is_numeric($data['limit']) || (int)$data['limit'] <= 0) {
+            if (!is_numeric($data['limit']) || (int) $data['limit'] <= 0) {
                 $this->sendError("Post parameters are missing", 400);
             }
-            $limit = (int)$data['limit'];
+            $limit = (int) $data['limit'];
         }
 
         // --- sort ---
@@ -174,13 +205,14 @@ class FlightAPI {
 
         // --- Build SELECT clause ---
         if ($return_cols !== null) {
-            $select = implode(', ', array_map(function($c) { return "`" . $c . "`"; }, $return_cols));
+            $select = implode(', ', array_map(function ($c) {
+                return "`" . $c . "`"; }, $return_cols));
         } else {
             $select = '*';
         }
 
-        $sql    = "SELECT " . $select . " FROM planes";
-        $types  = '';
+        $sql = "SELECT " . $select . " FROM planes";
+        $types = '';
         $params = array();
 
         if ($search && count($search) > 0) {
@@ -190,35 +222,35 @@ class FlightAPI {
                     // Range search: {"seats": {"min": 100, "max": 300}}
                     if (isset($val['min']) && is_numeric($val['min'])) {
                         $conditions[] = "`seats` >= ?";
-                        $params[]     = (int)$val['min'];
-                        $types       .= 'i';
+                        $params[] = (int) $val['min'];
+                        $types .= 'i';
                     }
                     if (isset($val['max']) && is_numeric($val['max'])) {
                         $conditions[] = "`seats` <= ?";
-                        $params[]     = (int)$val['max'];
-                        $types       .= 'i';
+                        $params[] = (int) $val['max'];
+                        $types .= 'i';
                     }
                 } elseif ($col === 'max_range_km' && is_array($val)) {
                     if (isset($val['min']) && is_numeric($val['min'])) {
                         $conditions[] = "`max_range_km` >= ?";
-                        $params[]     = (int)$val['min'];
-                        $types       .= 'i';
+                        $params[] = (int) $val['min'];
+                        $types .= 'i';
                     }
                     if (isset($val['max']) && is_numeric($val['max'])) {
                         $conditions[] = "`max_range_km` <= ?";
-                        $params[]     = (int)$val['max'];
-                        $types       .= 'i';
+                        $params[] = (int) $val['max'];
+                        $types .= 'i';
                     }
                 } elseif ($col === 'max_speed_kmh' && is_array($val)) {
                     if (isset($val['min']) && is_numeric($val['min'])) {
                         $conditions[] = "`max_speed_kmh` >= ?";
-                        $params[]     = (int)$val['min'];
-                        $types       .= 'i';
+                        $params[] = (int) $val['min'];
+                        $types .= 'i';
                     }
                     if (isset($val['max']) && is_numeric($val['max'])) {
                         $conditions[] = "`max_speed_kmh` <= ?";
-                        $params[]     = (int)$val['max'];
-                        $types       .= 'i';
+                        $params[] = (int) $val['max'];
+                        $types .= 'i';
                     }
                 } else {
                     if (!in_array($col, $allowed_columns)) {
@@ -226,10 +258,10 @@ class FlightAPI {
                     }
                     if ($fuzzy) {
                         $conditions[] = "`" . $col . "` LIKE ?";
-                        $params[]     = '%' . $val . '%';
+                        $params[] = '%' . $val . '%';
                     } else {
                         $conditions[] = "`" . $col . "` = ?";
-                        $params[]     = $val;
+                        $params[] = $val;
                     }
                     $types .= 's';
                 }
@@ -273,19 +305,26 @@ class FlightAPI {
 
         http_response_code(200);
         echo json_encode(array(
-            "status"    => "success",
+            "status" => "success",
             "timestamp" => (string) round(microtime(true) * 1000),
-            "data"      => $planes
+            "data" => $planes
         ));
         exit;
     }
 
-    private function getAllAirports($data) {
+    private function getAllAirports($data)
+    {
         $allowed_columns = array(
-            'id', 'name', 'city', 'country', 'code', 'longitude', 'latitude'
+            'id',
+            'name',
+            'city',
+            'country',
+            'code',
+            'longitude',
+            'latitude'
         );
 
-        $fuzzy = isset($data['fuzzy']) ? (bool)$data['fuzzy'] : true;
+        $fuzzy = isset($data['fuzzy']) ? (bool) $data['fuzzy'] : true;
 
         // --- return ---
         $return_cols = null;
@@ -306,10 +345,10 @@ class FlightAPI {
         $page_size = 30;
         $page = 1;
         if (isset($data['page'])) {
-            if (!is_numeric($data['page']) || (int)$data['page'] <= 0) {
+            if (!is_numeric($data['page']) || (int) $data['page'] <= 0) {
                 $this->sendError("Invalid 'page' parameter. Must be a positive integer.", 400);
             }
-            $page = (int)$data['page'];
+            $page = (int) $data['page'];
         }
         $offset = ($page - 1) * $page_size;
 
@@ -321,13 +360,14 @@ class FlightAPI {
 
         // --- Build SELECT clause ---
         if ($return_cols !== null) {
-            $select = implode(', ', array_map(function($c) { return "`" . $c . "`"; }, $return_cols));
+            $select = implode(', ', array_map(function ($c) {
+                return "`" . $c . "`"; }, $return_cols));
         } else {
             $select = '*';
         }
 
-        $sql    = "SELECT " . $select . " FROM airports";
-        $types  = '';
+        $sql = "SELECT " . $select . " FROM airports";
+        $types = '';
         $params = array();
 
         if ($search && count($search) > 0) {
@@ -338,10 +378,10 @@ class FlightAPI {
                 }
                 if ($fuzzy) {
                     $conditions[] = "`" . $col . "` LIKE ?";
-                    $params[]     = '%' . $val . '%';
+                    $params[] = '%' . $val . '%';
                 } else {
                     $conditions[] = "`" . $col . "` = ?";
-                    $params[]     = $val;
+                    $params[] = $val;
                 }
                 $types .= 's';
             }
@@ -379,14 +419,15 @@ class FlightAPI {
 
         http_response_code(200);
         echo json_encode(array(
-            "status"    => "success",
+            "status" => "success",
             "timestamp" => (string) round(microtime(true) * 1000),
-            "data"      => $airports
+            "data" => $airports
         ));
         exit;
     }
 
-    private function registerUser($data) {
+    private function registerUser($data)
+    {
         $required_fields = array('name', 'surname', 'email', 'password', 'user_type');
         foreach ($required_fields as $field) {
             if (!isset($data[$field]) || trim($data[$field]) === '') {
@@ -394,11 +435,11 @@ class FlightAPI {
             }
         }
 
-        $name     = trim($data['name']);
-        $surname  = trim($data['surname']);
-        $email    = trim($data['email']);
+        $name = trim($data['name']);
+        $surname = trim($data['surname']);
+        $email = trim($data['email']);
         $password = $data['password'];
-        $type     = trim($data['user_type']);
+        $type = trim($data['user_type']);
 
         if (!preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $email)) {
             $this->sendError("Invalid email format. Must contain '@' and a valid domain.", 400);
@@ -427,10 +468,10 @@ class FlightAPI {
         }
         $stmt->close();
 
-        $salt              = bin2hex(random_bytes(16));
-        $hashed_password   = hash('sha256', $salt . $password);
+        $salt = bin2hex(random_bytes(16));
+        $hashed_password = hash('sha256', $salt . $password);
         $stored_credential = $salt . ':' . $hashed_password;
-        $apikey            = bin2hex(random_bytes(16));
+        $apikey = bin2hex(random_bytes(16));
 
         $insert_stmt = $this->db->prepare(
             "INSERT INTO Users (name, surname, email, password, type, apikey) VALUES (?, ?, ?, ?, ?, ?)"
@@ -446,9 +487,9 @@ class FlightAPI {
             $insert_stmt->close();
             http_response_code(200);
             echo json_encode(array(
-                "status"    => "success",
+                "status" => "success",
                 "timestamp" => (string) round(microtime(true) * 1000),
-                "data"      => array(
+                "data" => array(
                     "apikey" => $apikey
                 )
             ));
@@ -460,28 +501,35 @@ class FlightAPI {
     }
 
     // ── Haversine distance formula ─────────────────────────────────────────────
-    private function calculateDistance($lat1, $lon1, $lat2, $lon2) {
-        $R      = 6377;
-        $phi1   = deg2rad((float)$lat1);
-        $phi2   = deg2rad((float)$lat2);
-        $dphi   = deg2rad((float)$lat2 - (float)$lat1);
-        $dlambda= deg2rad((float)$lon2 - (float)$lon1);
-        $hav    = pow(sin($dphi / 2), 2) + cos($phi1) * cos($phi2) * pow(sin($dlambda / 2), 2);
-        $theta  = 2 * asin(sqrt($hav));
+    private function calculateDistance($lat1, $lon1, $lat2, $lon2)
+    {
+        $R = 6377;
+        $phi1 = deg2rad((float) $lat1);
+        $phi2 = deg2rad((float) $lat2);
+        $dphi = deg2rad((float) $lat2 - (float) $lat1);
+        $dlambda = deg2rad((float) $lon2 - (float) $lon1);
+        $hav = pow(sin($dphi / 2), 2) + cos($phi1) * cos($phi2) * pow(sin($dlambda / 2), 2);
+        $theta = 2 * asin(sqrt($hav));
         return round($R * $theta, 2);
     }
 
     // ── Flight time formula ────────────────────────────────────────────────────
-    private function calculateFlightTime($distance, $vmax, $cmax, $seats) {
+    private function calculateFlightTime($distance, $vmax, $cmax, $seats)
+    {
         $vc = $vmax * (1 - 0.2 * ($cmax / ($cmax + 80 * $seats)));
 
-        if ($seats > 300)      $tclimb_base = 20;
-        elseif ($seats > 200)  $tclimb_base = 15;
-        elseif ($seats > 100)  $tclimb_base = 10;
-        elseif ($seats > 50)   $tclimb_base = 7;
-        else                   $tclimb_base = 5;
+        if ($seats > 300)
+            $tclimb_base = 20;
+        elseif ($seats > 200)
+            $tclimb_base = 15;
+        elseif ($seats > 100)
+            $tclimb_base = 10;
+        elseif ($seats > 50)
+            $tclimb_base = 7;
+        else
+            $tclimb_base = 5;
 
-        $k      = 0.001; // rate constant (not specified in spec)
+        $k = 0.001; // rate constant (not specified in spec)
         $tclimb = $tclimb_base * (1 - exp(-$k * $distance));
 
         // ttotal in minutes: (d/vc)*60 + tclimb + 15
@@ -489,27 +537,30 @@ class FlightAPI {
     }
 
     // ── DB helpers ─────────────────────────────────────────────────────────────
-    private function getPlaneById($plane_id) {
+    private function getPlaneById($plane_id)
+    {
         $stmt = $this->db->prepare("SELECT * FROM planes WHERE id = ?");
         $stmt->bind_param("i", $plane_id);
         $stmt->execute();
         $result = $stmt->get_result();
-        $row    = $result->fetch_assoc();
+        $row = $result->fetch_assoc();
         $stmt->close();
         return $row;
     }
 
-    private function getAirportByCode($code) {
+    private function getAirportByCode($code)
+    {
         $stmt = $this->db->prepare("SELECT * FROM airports WHERE code = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci");
         $stmt->bind_param("s", $code);
         $stmt->execute();
         $result = $stmt->get_result();
-        $row    = $result->fetch_assoc();
+        $row = $result->fetch_assoc();
         $stmt->close();
         return $row;
     }
 
-    private function getOrCreateFlight($plane_id, $dep_code, $arr_code, $date, $flight_time, $distance) {
+    private function getOrCreateFlight($plane_id, $dep_code, $arr_code, $date, $flight_time, $distance)
+    {
         $stmt = $this->db->prepare(
             "SELECT id FROM flights
             WHERE plane_id = ? AND departure_airport_code = ? AND arrival_airport_code = ? AND departure_date = ?"
@@ -519,7 +570,7 @@ class FlightAPI {
         $result = $stmt->get_result();
         if ($result->num_rows > 0) {
             $row = $result->fetch_assoc();
-            $id  = (int) $row['id'];
+            $id = (int) $row['id'];
             $stmt->close();
             return $id;
         }
@@ -536,26 +587,29 @@ class FlightAPI {
         return $id;
     }
 
-    private function checkSeatAvailability($flight_id, $plane_seats, $requested) {
+    private function checkSeatAvailability($flight_id, $plane_seats, $requested)
+    {
         $stmt = $this->db->prepare(
             "SELECT COALESCE(SUM(passengers), 0) AS total FROM bookings WHERE flight_id = ?"
         );
         $stmt->bind_param("i", $flight_id);
         $stmt->execute();
         $result = $stmt->get_result();
-        $row    = $result->fetch_assoc();
+        $row = $result->fetch_assoc();
         $booked = (int) $row['total'];
         $stmt->close();
         $available = $plane_seats - $booked;
         if ($requested > $available) {
             $this->sendError(
                 "Not enough seats. Requested: $requested, Available: $available. " .
-                "Please choose a different date or plane.", 409
+                "Please choose a different date or plane.",
+                409
             );
         }
     }
 
-    private function createBookingRecord($flight_id, $user_id, $passengers) {
+    private function createBookingRecord($flight_id, $user_id, $passengers)
+    {
         $stmt = $this->db->prepare(
             "INSERT INTO bookings (flight_id, user_id, passengers) VALUES (?, ?, ?)"
         );
@@ -570,22 +624,23 @@ class FlightAPI {
     }
 
     // ── BookFlight ─────────────────────────────────────────────────────────────
-    private function bookFlight($data) {
+    private function bookFlight($data)
+    {
         $required = array('plane_id', 'departure_airport_code', 'arrival_airport_code', 'departure_date', 'passengers');
         foreach ($required as $field) {
-            if (!isset($data[$field]) || trim((string)$data[$field]) === '') {
+            if (!isset($data[$field]) || trim((string) $data[$field]) === '') {
                 $this->sendError("Post parameters are missing", 400);
             }
         }
 
-        $user_id    = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
-        $plane_id   = (int) $data['plane_id'];
-        $dep_code   = strtoupper(trim($data['departure_airport_code']));
-        $arr_code   = strtoupper(trim($data['arrival_airport_code']));
-        $dep_date   = trim($data['departure_date']);
+        $user_id = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
+        $plane_id = (int) $data['plane_id'];
+        $dep_code = strtoupper(trim($data['departure_airport_code']));
+        $arr_code = strtoupper(trim($data['arrival_airport_code']));
+        $dep_date = trim($data['departure_date']);
         $passengers = (int) $data['passengers'];
-        $ret_date   = isset($data['return_date']) && trim($data['return_date']) !== ''
-                    ? trim($data['return_date']) : null;
+        $ret_date = isset($data['return_date']) && trim($data['return_date']) !== ''
+            ? trim($data['return_date']) : null;
 
         if ($passengers < 1) {
             $this->sendError("Passengers must be at least 1.", 400);
@@ -595,53 +650,62 @@ class FlightAPI {
         }
 
         $plane = $this->getPlaneById($plane_id);
-        if (!$plane) $this->sendError("Plane not found.", 404);
+        if (!$plane)
+            $this->sendError("Plane not found.", 404);
 
         $dep = $this->getAirportByCode($dep_code);
         $arr = $this->getAirportByCode($arr_code);
-        if (!$dep) $this->sendError("Departure airport not found: $dep_code", 404);
-        if (!$arr) $this->sendError("Arrival airport not found: $arr_code", 404);
+        if (!$dep)
+            $this->sendError("Departure airport not found: $dep_code", 404);
+        if (!$arr)
+            $this->sendError("Arrival airport not found: $arr_code", 404);
 
-        $distance    = $this->calculateDistance(
-            $dep['latitude'], $dep['longitude'],
-            $arr['latitude'], $arr['longitude']
+        $distance = $this->calculateDistance(
+            $dep['latitude'],
+            $dep['longitude'],
+            $arr['latitude'],
+            $arr['longitude']
         );
         $flight_time = $this->calculateFlightTime(
-            $distance, $plane['max_speed_kmh'], $plane['max_cargo_kg'], $plane['seats']
+            $distance,
+            $plane['max_speed_kmh'],
+            $plane['max_cargo_kg'],
+            $plane['seats']
         );
 
         // Outbound flight
-        $out_flight_id  = $this->getOrCreateFlight($plane_id, $dep_code, $arr_code, $dep_date, $flight_time, $distance);
+        $out_flight_id = $this->getOrCreateFlight($plane_id, $dep_code, $arr_code, $dep_date, $flight_time, $distance);
         $this->checkSeatAvailability($out_flight_id, $plane['seats'], $passengers);
         $out_booking_id = $this->createBookingRecord($out_flight_id, $user_id, $passengers);
 
         $result = array(
             'outbound_booking_id' => $out_booking_id,
-            'outbound_flight_id'  => $out_flight_id,
-            'distance_km'         => $distance,
-            'flight_time_min'     => $flight_time
+            'outbound_flight_id' => $out_flight_id,
+            'distance_km' => $distance,
+            'flight_time_min' => $flight_time
         );
 
         // Return flight (swap airports)
         if ($ret_date) {
-            $ret_flight_id  = $this->getOrCreateFlight($plane_id, $arr_code, $dep_code, $ret_date, $flight_time, $distance);
+            $ret_flight_id = $this->getOrCreateFlight($plane_id, $arr_code, $dep_code, $ret_date, $flight_time, $distance);
             $this->checkSeatAvailability($ret_flight_id, $plane['seats'], $passengers);
             $ret_booking_id = $this->createBookingRecord($ret_flight_id, $user_id, $passengers);
             $result['return_booking_id'] = $ret_booking_id;
-            $result['return_flight_id']  = $ret_flight_id;
+            $result['return_flight_id'] = $ret_flight_id;
         }
 
         http_response_code(200);
         echo json_encode(array(
-            "status"    => "success",
+            "status" => "success",
             "timestamp" => (string) round(microtime(true) * 1000),
-            "data"      => array($result)
+            "data" => array($result)
         ));
         exit;
     }
 
     // ── GetBookings ────────────────────────────────────────────────────────────
-    private function getBookings($data) {
+    private function getBookings($data)
+    {
         $user_id = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
 
         $stmt = $this->db->prepare(
@@ -664,7 +728,7 @@ class FlightAPI {
         }
         $stmt->bind_param("i", $user_id);
         $stmt->execute();
-        $result   = $stmt->get_result();
+        $result = $stmt->get_result();
         $bookings = array();
         while ($row = $result->fetch_assoc()) {
             $bookings[] = $row;
@@ -673,19 +737,20 @@ class FlightAPI {
 
         http_response_code(200);
         echo json_encode(array(
-            "status"    => "success",
+            "status" => "success",
             "timestamp" => (string) round(microtime(true) * 1000),
-            "data"      => $bookings
+            "data" => $bookings
         ));
         exit;
     }
 
     // ── CancelBooking ──────────────────────────────────────────────────────────
-    private function cancelBooking($data) {
+    private function cancelBooking($data)
+    {
         if (!isset($data['booking_id']) || !is_numeric($data['booking_id'])) {
             $this->sendError("Post parameters are missing", 400);
         }
-        $user_id    = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
+        $user_id = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
         $booking_id = (int) $data['booking_id'];
 
         $check = $this->db->prepare("SELECT id FROM bookings WHERE id = ? AND user_id = ?");
@@ -704,9 +769,9 @@ class FlightAPI {
             $stmt->close();
             http_response_code(200);
             echo json_encode(array(
-                "status"    => "success",
+                "status" => "success",
                 "timestamp" => (string) round(microtime(true) * 1000),
-                "data"      => array(array("message" => "Booking cancelled successfully."))
+                "data" => array(array("message" => "Booking cancelled successfully."))
             ));
             exit;
         }
@@ -714,12 +779,13 @@ class FlightAPI {
         $this->sendError("Failed to cancel booking.", 500);
     }
 
-    private function getUserIdFromApiKey($apikey) {
+    private function getUserIdFromApiKey($apikey)
+    {
         if (!isset($apikey) || trim($apikey) === '') {
             $this->sendError("Post parameters are missing", 400);
         }
         $apikey = trim($apikey);
-        $stmt   = $this->db->prepare("SELECT id FROM Users WHERE apikey = ?");
+        $stmt = $this->db->prepare("SELECT id FROM Users WHERE apikey = ?");
         if (!$stmt) {
             $this->sendError("Database error: " . $this->db->error, 500);
         }
@@ -734,8 +800,376 @@ class FlightAPI {
         $stmt->close();
         return (int) $row['id'];
     }
-    
-    private function getAirports($data) {
+
+    // ── UpdateFlightPosition (PA4) ────────────────────────────────────────────
+    private function updateFlightPosition($data)
+    {
+        // Server-to-server: validate the shared key, no user session needed
+        if (!isset($data['server_key']) || $data['server_key'] !== self::SERVER_API_KEY) {
+            $this->sendError("Unauthorized. Invalid server API key.", 401);
+        }
+
+        $required = array('flight_id', 'latitude', 'longitude', 'status');
+        foreach ($required as $field) {
+            if (!isset($data[$field]) || trim((string) $data[$field]) === '') {
+                $this->sendError("Post parameters are missing", 400);
+            }
+        }
+
+        $flight_id = (int) $data['flight_id'];
+        $latitude  = (float) $data['latitude'];
+        $longitude = (float) $data['longitude'];
+        $status    = trim($data['status']);
+
+        $allowed_statuses = array('Scheduled', 'Boarding', 'In Flight', 'Landed');
+        if (!in_array($status, $allowed_statuses)) {
+            $this->sendError(
+                "Invalid status. Must be one of: " . implode(', ', $allowed_statuses),
+                400
+            );
+        }
+
+        $stmt = $this->db->prepare(
+            "UPDATE Flights SET current_latitude = ?, current_longitude = ?, status = ? WHERE id = ?"
+        );
+        if (!$stmt) {
+            $this->sendError("Database error (UpdateFlightPosition): " . $this->db->error, 500);
+        }
+        $stmt->bind_param("ddsi", $latitude, $longitude, $status, $flight_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $this->sendError("Failed to update flight position.", 500);
+        }
+        if ($stmt->affected_rows === 0) {
+            $stmt->close();
+            $this->sendError("Flight not found.", 404);
+        }
+        $stmt->close();
+
+        http_response_code(200);
+        echo json_encode(array(
+            "status"    => "success",
+            "timestamp" => (string) round(microtime(true) * 1000),
+            "data"      => array(array(
+                "message"   => "Flight position updated successfully.",
+                "flight_id" => $flight_id,
+                "latitude"  => $latitude,
+                "longitude" => $longitude,
+                "status"    => $status
+            ))
+        ));
+        exit;
+    }
+
+    // ── BoardFlight (PA4) ─────────────────────────────────────────────────────
+    private function boardFlight($data)
+    {
+        if (!isset($data['flight_id']) || !is_numeric($data['flight_id'])) {
+            $this->sendError("Post parameters are missing", 400);
+        }
+
+        $user = $this->getUserWithRole(isset($data['apikey']) ? $data['apikey'] : '');
+
+        if ($user['type'] !== 'Passenger') {
+            $this->sendError("Access denied. Passenger role required.", 403);
+        }
+
+        $flight_id = (int) $data['flight_id'];
+
+        // Check the passenger is booked on this flight and get the flight's dispatched_at
+        $stmt = $this->db->prepare(
+            "SELECT pf.id, pf.boarding_confirmed, f.status, f.dispatched_at
+             FROM Passenger_Flights pf
+             INNER JOIN Flights f ON f.id = pf.flight_id
+             WHERE pf.flight_id = ? AND pf.passenger_id = ?"
+        );
+        if (!$stmt) {
+            $this->sendError("Database error (BoardFlight): " . $this->db->error, 500);
+        }
+        $stmt->bind_param("ii", $flight_id, $user['id']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows === 0) {
+            $stmt->close();
+            $this->sendError("Flight not found or you are not booked on this flight.", 404);
+        }
+        $booking = $result->fetch_assoc();
+        $stmt->close();
+
+        // Already confirmed
+        if ($booking['boarding_confirmed'] == 1) {
+            $this->sendError("Boarding already confirmed for this flight.", 400);
+        }
+
+        // Flight must be in Boarding status
+        if ($booking['status'] !== 'Boarding') {
+            $this->sendError(
+                "Flight is not currently boarding. Current status: '" . $booking['status'] . "'.",
+                400
+            );
+        }
+
+        // Enforce the 60-second window from dispatched_at
+        if ($booking['dispatched_at'] === null) {
+            $this->sendError("Flight has not been dispatched yet.", 400);
+        }
+
+        $dispatched_ts = strtotime($booking['dispatched_at']);
+        if ((time() - $dispatched_ts) > 60) {
+            $this->sendError(
+                "Boarding confirmation window has expired. You must confirm within 60 seconds of dispatch.",
+                400
+            );
+        }
+
+        // Confirm boarding
+        $now = date('Y-m-d H:i:s');
+        $upd = $this->db->prepare(
+            "UPDATE Passenger_Flights SET boarding_confirmed = 1, confirmed_at = ?
+             WHERE flight_id = ? AND passenger_id = ?"
+        );
+        if (!$upd) {
+            $this->sendError("Database error (BoardFlight update): " . $this->db->error, 500);
+        }
+        $upd->bind_param("sii", $now, $flight_id, $user['id']);
+        if (!$upd->execute()) {
+            $upd->close();
+            $this->sendError("Failed to confirm boarding.", 500);
+        }
+        $upd->close();
+
+        http_response_code(200);
+        echo json_encode(array(
+            "status"    => "success",
+            "timestamp" => (string) round(microtime(true) * 1000),
+            "data"      => array(array(
+                "message"      => "Boarding confirmed successfully.",
+                "flight_id"    => $flight_id,
+                "confirmed_at" => $now
+            ))
+        ));
+        exit;
+    }
+
+    // ── DispatchFlight (PA4) ──────────────────────────────────────────────────
+    private function dispatchFlight($data)
+    {
+        if (!isset($data['flight_id']) || !is_numeric($data['flight_id'])) {
+            $this->sendError("Post parameters are missing", 400);
+        }
+
+        $user = $this->getUserWithRole(isset($data['apikey']) ? $data['apikey'] : '');
+
+        if ($user['type'] !== 'ATC') {
+            $this->sendError("Access denied. ATC role required.", 403);
+        }
+
+        $flight_id = (int) $data['flight_id'];
+
+        // Fetch the flight and check its current status
+        $stmt = $this->db->prepare("SELECT id, status FROM Flights WHERE id = ?");
+        if (!$stmt) {
+            $this->sendError("Database error (DispatchFlight): " . $this->db->error, 500);
+        }
+        $stmt->bind_param("i", $flight_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows === 0) {
+            $stmt->close();
+            $this->sendError("Flight not found.", 404);
+        }
+        $flight = $result->fetch_assoc();
+        $stmt->close();
+
+        // Only Scheduled flights can be dispatched
+        if ($flight['status'] !== 'Scheduled') {
+            $this->sendError(
+                "Cannot dispatch flight. Current status is '" . $flight['status'] . "'. Only Scheduled flights can be dispatched.",
+                400
+            );
+        }
+
+        // Transition to Boarding and record dispatched_at
+        $now = date('Y-m-d H:i:s');
+        $upd = $this->db->prepare(
+            "UPDATE Flights SET status = 'Boarding', dispatched_at = ? WHERE id = ?"
+        );
+        if (!$upd) {
+            $this->sendError("Database error (DispatchFlight update): " . $this->db->error, 500);
+        }
+        $upd->bind_param("si", $now, $flight_id);
+        if (!$upd->execute()) {
+            $upd->close();
+            $this->sendError("Failed to dispatch flight.", 500);
+        }
+        $upd->close();
+
+        http_response_code(200);
+        echo json_encode(array(
+            "status"    => "success",
+            "timestamp" => (string) round(microtime(true) * 1000),
+            "data"      => array(array(
+                "message"       => "Flight dispatched successfully.",
+                "flight_id"     => $flight_id,
+                "new_status"    => "Boarding",
+                "dispatched_at" => $now
+            ))
+        ));
+        exit;
+    }
+
+    // ── GetFlight (PA4) ───────────────────────────────────────────────────────
+    private function getFlight($data)
+    {
+        if (!isset($data['flight_id']) || !is_numeric($data['flight_id'])) {
+            $this->sendError("Post parameters are missing", 400);
+        }
+
+        $flight_id = (int) $data['flight_id'];
+        $user      = $this->getUserWithRole(isset($data['apikey']) ? $data['apikey'] : '');
+
+        // Passengers can only view flights they are booked on
+        if ($user['type'] === 'Passenger') {
+            $check = $this->db->prepare(
+                "SELECT id FROM Passenger_Flights WHERE flight_id = ? AND passenger_id = ?"
+            );
+            if (!$check) {
+                $this->sendError("Database error (GetFlight check): " . $this->db->error, 500);
+            }
+            $check->bind_param("ii", $flight_id, $user['id']);
+            $check->execute();
+            $check->store_result();
+            if ($check->num_rows === 0) {
+                $check->close();
+                $this->sendError("Flight not found or access denied.", 403);
+            }
+            $check->close();
+        }
+
+        // Fetch the flight detail
+        $stmt = $this->db->prepare(
+            "SELECT f.id, f.flight_number, f.departure_time, f.flight_duration_hours,
+                    f.status, f.current_latitude, f.current_longitude, f.dispatched_at,
+                    oa.id AS origin_id, oa.name AS origin_name, oa.iata_code AS origin_iata,
+                    oa.city AS origin_city, oa.country AS origin_country,
+                    oa.latitude AS origin_latitude, oa.longitude AS origin_longitude,
+                    da.id AS destination_id, da.name AS destination_name, da.iata_code AS destination_iata,
+                    da.city AS destination_city, da.country AS destination_country,
+                    da.latitude AS destination_latitude, da.longitude AS destination_longitude
+             FROM Flights f
+             INNER JOIN Airports oa ON oa.id = f.origin_airport_id
+             INNER JOIN Airports da ON da.id = f.destination_airport_id
+             WHERE f.id = ?"
+        );
+        if (!$stmt) {
+            $this->sendError("Database error (GetFlight): " . $this->db->error, 500);
+        }
+        $stmt->bind_param("i", $flight_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows === 0) {
+            $stmt->close();
+            $this->sendError("Flight not found.", 404);
+        }
+        $flight = $result->fetch_assoc();
+        $stmt->close();
+
+        // ATC also gets the full passenger list
+        if ($user['type'] === 'ATC') {
+            $pax = $this->db->prepare(
+                "SELECT u.id, u.name, u.surname, u.email,
+                        pf.seat_number, pf.boarding_confirmed, pf.confirmed_at
+                 FROM Passenger_Flights pf
+                 INNER JOIN Users u ON u.id = pf.passenger_id
+                 WHERE pf.flight_id = ?"
+            );
+            if (!$pax) {
+                $this->sendError("Database error (GetFlight passengers): " . $this->db->error, 500);
+            }
+            $pax->bind_param("i", $flight_id);
+            $pax->execute();
+            $pax_result = $pax->get_result();
+            $passengers = array();
+            while ($row = $pax_result->fetch_assoc()) {
+                $passengers[] = $row;
+            }
+            $pax->close();
+            $flight['passengers'] = $passengers;
+        }
+
+        http_response_code(200);
+        echo json_encode(array(
+            "status"    => "success",
+            "timestamp" => (string) round(microtime(true) * 1000),
+            "data"      => array($flight)
+        ));
+        exit;
+    }
+
+    private function getAllFlights($data)
+    {
+        $user = $this->getUserWithRole(isset($data['apikey']) ? $data['apikey'] : '');
+
+        if ($user['type'] === 'ATC') {
+            // ATC gets every flight with full status and GPS
+            $stmt = $this->db->prepare(
+                "SELECT f.id, f.flight_number, f.departure_time, f.flight_duration_hours,
+                        f.status, f.current_latitude, f.current_longitude, f.dispatched_at,
+                        oa.name AS origin_name, oa.iata_code AS origin_iata, oa.city AS origin_city,
+                        oa.latitude AS origin_latitude, oa.longitude AS origin_longitude,
+                        da.name AS destination_name, da.iata_code AS destination_iata, da.city AS destination_city,
+                        da.latitude AS destination_latitude, da.longitude AS destination_longitude
+                FROM Flights f
+                INNER JOIN Airports oa ON oa.id = f.origin_airport_id
+                INNER JOIN Airports da ON da.id = f.destination_airport_id
+                ORDER BY f.departure_time ASC"
+            );
+            if (!$stmt) {
+                $this->sendError("Database error (GetAllFlights ATC): " . $this->db->error, 500);
+            }
+            $stmt->execute();
+        } else {
+            // Passenger only sees flights they are booked on
+            $stmt = $this->db->prepare(
+                "SELECT f.id, f.flight_number, f.departure_time, f.flight_duration_hours,
+                        f.status, f.current_latitude, f.current_longitude, f.dispatched_at,
+                        oa.name AS origin_name, oa.iata_code AS origin_iata, oa.city AS origin_city,
+                        oa.latitude AS origin_latitude, oa.longitude AS origin_longitude,
+                        da.name AS destination_name, da.iata_code AS destination_iata, da.city AS destination_city,
+                        da.latitude AS destination_latitude, da.longitude AS destination_longitude,
+                        pf.seat_number, pf.boarding_confirmed
+                FROM Flights f
+                INNER JOIN Airports oa ON oa.id = f.origin_airport_id
+                INNER JOIN Airports da ON da.id = f.destination_airport_id
+                INNER JOIN Passenger_Flights pf ON pf.flight_id = f.id
+                WHERE pf.passenger_id = ?
+                ORDER BY f.departure_time ASC"
+            );
+            if (!$stmt) {
+                $this->sendError("Database error (GetAllFlights Passenger): " . $this->db->error, 500);
+            }
+            $stmt->bind_param("i", $user['id']);
+            $stmt->execute();
+        }
+
+        $result = $stmt->get_result();
+        $flights = array();
+        while ($row = $result->fetch_assoc()) {
+            $flights[] = $row;
+        }
+        $stmt->close();
+
+        http_response_code(200);
+        echo json_encode(array(
+            "status" => "success",
+            "timestamp" => (string) round(microtime(true) * 1000),
+            "data" => $flights
+        ));
+        exit;
+    }
+
+    private function getAirports($data)
+    {
         $stmt = $this->db->prepare(
             "SELECT id, name, iata_code, city, country, latitude, longitude
             FROM Airports
@@ -745,7 +1179,7 @@ class FlightAPI {
             $this->sendError("Database error (GetAirports): " . $this->db->error, 500);
         }
         $stmt->execute();
-        $result   = $stmt->get_result();
+        $result = $stmt->get_result();
         $airports = array();
         while ($row = $result->fetch_assoc()) {
             $airports[] = $row;
@@ -754,14 +1188,15 @@ class FlightAPI {
 
         http_response_code(200);
         echo json_encode(array(
-            "status"    => "success",
+            "status" => "success",
             "timestamp" => (string) round(microtime(true) * 1000),
-            "data"      => $airports
+            "data" => $airports
         ));
         exit;
     }
 
-    private function getUserWithRole($apikey) {
+    private function getUserWithRole($apikey)
+    {
         if (!isset($apikey) || trim($apikey) === '') {
             $this->sendError("Post parameters are missing", 400);
         }
@@ -779,14 +1214,15 @@ class FlightAPI {
         }
         $row = $result->fetch_assoc();
         $stmt->close();
-        return array('id' => (int)$row['id'], 'type' => $row['type']);
+        return array('id' => (int) $row['id'], 'type' => $row['type']);
     }
 
-    private function addFavourite($data) {
+    private function addFavourite($data)
+    {
         if (!isset($data['plane_id']) || !is_numeric($data['plane_id'])) {
             $this->sendError("Post parameters are missing", 400);
         }
-        $user_id  = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
+        $user_id = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
         $plane_id = (int) $data['plane_id'];
 
         $check = $this->db->prepare("SELECT id FROM favourites WHERE user_id = ? AND plane_id = ?");
@@ -808,9 +1244,9 @@ class FlightAPI {
             $stmt->close();
             http_response_code(200);
             echo json_encode(array(
-                "status"    => "success",
+                "status" => "success",
                 "timestamp" => (string) round(microtime(true) * 1000),
-                "data"      => array(array("message" => "Plane added to favourites."))
+                "data" => array(array("message" => "Plane added to favourites."))
             ));
             exit;
         }
@@ -818,11 +1254,12 @@ class FlightAPI {
         $this->sendError("Failed to add to favourites.", 500);
     }
 
-    private function removeFavourite($data) {
+    private function removeFavourite($data)
+    {
         if (!isset($data['plane_id']) || !is_numeric($data['plane_id'])) {
             $this->sendError("Post parameters are missing", 400);
         }
-        $user_id  = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
+        $user_id = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
         $plane_id = (int) $data['plane_id'];
 
         $stmt = $this->db->prepare("DELETE FROM favourites WHERE user_id = ? AND plane_id = ?");
@@ -834,9 +1271,9 @@ class FlightAPI {
             $stmt->close();
             http_response_code(200);
             echo json_encode(array(
-                "status"    => "success",
+                "status" => "success",
                 "timestamp" => (string) round(microtime(true) * 1000),
-                "data"      => array(array("message" => "Plane removed from favourites."))
+                "data" => array(array("message" => "Plane removed from favourites."))
             ));
             exit;
         }
@@ -844,7 +1281,8 @@ class FlightAPI {
         $this->sendError("Failed to remove from favourites.", 500);
     }
 
-    private function getFavourites($data) {
+    private function getFavourites($data)
+    {
         $user_id = $this->getUserIdFromApiKey(isset($data['apikey']) ? $data['apikey'] : '');
 
         $stmt = $this->db->prepare(
@@ -868,20 +1306,23 @@ class FlightAPI {
 
         http_response_code(200);
         echo json_encode(array(
-            "status"    => "success",
+            "status" => "success",
             "timestamp" => (string) round(microtime(true) * 1000),
-            "data"      => $planes
+            "data" => $planes
         ));
         exit;
     }
 
-    private function loginUser($data) {
-        if (!isset($data['email']) || trim($data['email']) === '' ||
-            !isset($data['password']) || $data['password'] === '') {
+    private function loginUser($data)
+    {
+        if (
+            !isset($data['email']) || trim($data['email']) === '' ||
+            !isset($data['password']) || $data['password'] === ''
+        ) {
             $this->sendError("Post parameters are missing", 400);
         }
 
-        $email    = trim($data['email']);
+        $email = trim($data['email']);
         $password = $data['password'];
 
         $stmt = $this->db->prepare(
@@ -917,27 +1358,28 @@ class FlightAPI {
 
         http_response_code(200);
         echo json_encode(array(
-            "status"    => "success",
+            "status" => "success",
             "timestamp" => (string) round(microtime(true) * 1000),
-            "data"      => array(
+            "data" => array(
                 array(
-                    "apikey"  => $user['apikey'],
-                    "name"    => $user['name'],
+                    "apikey" => $user['apikey'],
+                    "name" => $user['name'],
                     "surname" => $user['surname'],
-                    "email"   => $user['email'],
-                    "type"    => $user['type']
+                    "email" => $user['email'],
+                    "type" => $user['type']
                 )
             )
         ));
         exit;
     }
 
-    private function sendError($message, $http_code) {
+    private function sendError($message, $http_code)
+    {
         http_response_code($http_code);
         echo json_encode(array(
-            "status"    => "error",
+            "status" => "error",
             "timestamp" => (string) round(microtime(true) * 1000),
-            "data"      => $message
+            "data" => $message
         ));
         exit;
     }
