@@ -83,6 +83,10 @@ class FlightAPI {
             case 'CancelBooking':
                 $this->cancelBooking($data);
                 break;
+            case 'GetAirports':
+                $this->validateApiKey($data);
+                $this->getAirports($data);
+                break;
             default:
                 $this->sendError("Unknown type: '" . htmlspecialchars($data['type']) . "'. Valid types: Register, Login, GetAllPlanes, GetAllAirports, AddFavourite, RemoveFavourite, GetFavourites, BookFlight, GetBookings, CancelBooking.", 400);
         }
@@ -119,7 +123,6 @@ class FlightAPI {
 
         $fuzzy = isset($data['fuzzy']) ? (bool)$data['fuzzy'] : true;
 
-        // --- return: which columns to include in response ---
         $return_cols = null;
         if (isset($data['return'])) {
             if ($data['return'] === '*') {
@@ -509,7 +512,7 @@ class FlightAPI {
     private function getOrCreateFlight($plane_id, $dep_code, $arr_code, $date, $flight_time, $distance) {
         $stmt = $this->db->prepare(
             "SELECT id FROM flights
-             WHERE plane_id = ? AND departure_airport_code = ? AND arrival_airport_code = ? AND departure_date = ?"
+            WHERE plane_id = ? AND departure_airport_code = ? AND arrival_airport_code = ? AND departure_date = ?"
         );
         $stmt->bind_param("isss", $plane_id, $dep_code, $arr_code, $date);
         $stmt->execute();
@@ -524,7 +527,7 @@ class FlightAPI {
 
         $ins = $this->db->prepare(
             "INSERT INTO flights (plane_id, departure_airport_code, arrival_airport_code, departure_date, flight_time, distance)
-             VALUES (?, ?, ?, ?, ?, ?)"
+            VALUES (?, ?, ?, ?, ?, ?)"
         );
         $ins->bind_param("isssdd", $plane_id, $dep_code, $arr_code, $date, $flight_time, $distance);
         $ins->execute();
@@ -648,13 +651,13 @@ class FlightAPI {
                     p.id AS plane_id, p.manufacturer, p.model, p.image_url, p.seats,
                     da.name AS departure_airport_name, da.city AS departure_city,
                     aa.name AS arrival_airport_name, aa.city AS arrival_city
-             FROM bookings b
-             INNER JOIN flights f ON f.id = b.flight_id
-             INNER JOIN planes  p ON p.id = f.plane_id
-             LEFT JOIN  airports da ON da.code = CONVERT(f.departure_airport_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
-             LEFT JOIN  airports aa ON aa.code = CONVERT(f.arrival_airport_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
-             WHERE b.user_id = ?
-             ORDER BY f.departure_date ASC"
+            FROM bookings b
+            INNER JOIN flights f ON f.id = b.flight_id
+            INNER JOIN planes  p ON p.id = f.plane_id
+            LEFT JOIN  airports da ON da.code = CONVERT(f.departure_airport_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
+            LEFT JOIN  airports aa ON aa.code = CONVERT(f.arrival_airport_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
+            WHERE b.user_id = ?
+            ORDER BY f.departure_date ASC"
         );
         if (!$stmt) {
             $this->sendError("Database prepare error (GetBookings): " . $this->db->error, 500);
@@ -730,6 +733,53 @@ class FlightAPI {
         $row = $result->fetch_assoc();
         $stmt->close();
         return (int) $row['id'];
+    }
+    
+    private function getAirports($data) {
+        $stmt = $this->db->prepare(
+            "SELECT id, name, iata_code, city, country, latitude, longitude
+            FROM Airports
+            ORDER BY name ASC"
+        );
+        if (!$stmt) {
+            $this->sendError("Database error (GetAirports): " . $this->db->error, 500);
+        }
+        $stmt->execute();
+        $result   = $stmt->get_result();
+        $airports = array();
+        while ($row = $result->fetch_assoc()) {
+            $airports[] = $row;
+        }
+        $stmt->close();
+
+        http_response_code(200);
+        echo json_encode(array(
+            "status"    => "success",
+            "timestamp" => (string) round(microtime(true) * 1000),
+            "data"      => $airports
+        ));
+        exit;
+    }
+
+    private function getUserWithRole($apikey) {
+        if (!isset($apikey) || trim($apikey) === '') {
+            $this->sendError("Post parameters are missing", 400);
+        }
+        $apikey = trim($apikey);
+        $stmt = $this->db->prepare("SELECT id, type FROM Users WHERE apikey = ?");
+        if (!$stmt) {
+            $this->sendError("Database error: " . $this->db->error, 500);
+        }
+        $stmt->bind_param("s", $apikey);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows === 0) {
+            $stmt->close();
+            $this->sendError("Invalid API key. Access denied.", 403);
+        }
+        $row = $result->fetch_assoc();
+        $stmt->close();
+        return array('id' => (int)$row['id'], 'type' => $row['type']);
     }
 
     private function addFavourite($data) {
@@ -835,7 +885,7 @@ class FlightAPI {
         $password = $data['password'];
 
         $stmt = $this->db->prepare(
-            "SELECT id, name, surname, email, apikey, password FROM Users WHERE email = ?"
+            "SELECT id, name, surname, email, apikey, password, type FROM Users WHERE email = ?"
         );
         if (!$stmt) {
             $this->sendError("Database error: " . $this->db->error, 500);
@@ -874,7 +924,8 @@ class FlightAPI {
                     "apikey"  => $user['apikey'],
                     "name"    => $user['name'],
                     "surname" => $user['surname'],
-                    "email"   => $user['email']
+                    "email"   => $user['email'],
+                    "type"    => $user['type']
                 )
             )
         ));
